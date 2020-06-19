@@ -147,7 +147,7 @@ class TestEvents extends FlatSpec with Matchers {
     val results = ee.query(query)
     results.totalHits should equal (1)
     results.scoreDocs.head.matches should have size 2
-    ee.state.addMentions(OdinResultsIterator(results, "NP"))
+//    ee.state.addMentions(OdinResultsIterator(results, "NP"))
   }
 
   it should "find event with mentions from the state when the state is populated" in {

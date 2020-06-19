@@ -1,5 +1,7 @@
 package ai.lum.odinson.compiler
 
+import ai.lum.odinson.state.State
+
 object Ast {
 
   sealed trait Matcher

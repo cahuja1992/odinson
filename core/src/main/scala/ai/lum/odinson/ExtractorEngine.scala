@@ -27,7 +27,7 @@ class ExtractorEngine(
   val indexSearcher: OdinsonIndexSearcher,
   val compiler: QueryCompiler,
   val displayField: String,
-  val state: State,
+  val stateFactory: StateFactory,
   val parentDocIdField: String
 ) {
 
@@ -129,7 +129,9 @@ class ExtractorEngine(
     n: Int,
     after: OdinsonScoreDoc,
   ): OdinResults = {
-    indexSearcher.odinSearch(after, odinsonQuery, n, false)
+    stateFactory.usingState { state =>
+      indexSearcher.odinSearch(after, odinsonQuery, state, n, false)
+    }
   }
 
   /** executes query and returns next n results after the provided doc */
@@ -139,7 +141,9 @@ class ExtractorEngine(
     after: OdinsonScoreDoc,
     disableMatchSelector: Boolean,
   ): OdinResults = {
-    indexSearcher.odinSearch(after, odinsonQuery, n, disableMatchSelector)
+    stateFactory.usingState { state =>
+      indexSearcher.odinSearch(after, odinsonQuery, state, n, disableMatchSelector)
+    }
   }
 
   def getString(docID: Int, m: OdinsonMatch): String = {
@@ -192,14 +196,13 @@ object ExtractorEngine {
     val indexSearcher = new OdinsonIndexSearcher(indexReader, computeTotalHits)
     val vocabulary = Vocabulary.fromDirectory(indexDir)
     val compiler = QueryCompiler(config, vocabulary)
-    val state = StateFactory.newState(config)
-    compiler.setState(state)
+    val stateFactory = StateFactory(config)
     val parentDocIdField = config[String]("index.documentIdField")
     new ExtractorEngine(
       indexSearcher,
       compiler,
       displayField,
-      state,
+      stateFactory,
       parentDocIdField
     )
   }

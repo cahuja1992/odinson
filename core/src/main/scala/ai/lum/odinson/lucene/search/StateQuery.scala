@@ -9,21 +9,24 @@ import ai.lum.odinson.state.State
 
 class StateQuery(
   val field: String,
-  val label: String,
-  val state: State
+  val label: String
 ) extends OdinsonQuery { self =>
 
-  override def hashCode: Int = (field, label, state).##
+  var state: Option[State] = None
+
+  override def hashCode: Int = (field, label).##
 
   def toString(field: String): String = "StateQuery"
 
   def getField(): String = field
 
+  def setState(state: State): Unit = this.state = Some(state)
+
   override def createWeight(
     searcher: IndexSearcher,
     needsScores: Boolean
   ): OdinsonWeight = {
-    new StateWeight(searcher, null, label, state)
+    new StateWeight(searcher, null, label, state.get)
   }
 
   class StateWeight(
