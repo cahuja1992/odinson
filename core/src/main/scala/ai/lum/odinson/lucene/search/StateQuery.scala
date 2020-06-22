@@ -12,7 +12,9 @@ class StateQuery(
   val label: String
 ) extends OdinsonQuery { self =>
 
-  var state: Option[State] = None
+  var stateOpt: Option[State] = None
+
+  override def setState(stateOpt: Option[State]): Unit = this.stateOpt = stateOpt
 
   override def hashCode: Int = (field, label).##
 
@@ -20,20 +22,18 @@ class StateQuery(
 
   def getField(): String = field
 
-  def setState(state: State): Unit = this.state = Some(state)
-
   override def createWeight(
     searcher: IndexSearcher,
     needsScores: Boolean
   ): OdinsonWeight = {
-    new StateWeight(searcher, null, label, state.get)
+    new StateWeight(searcher, null, label, stateOpt)
   }
 
   class StateWeight(
     searcher: IndexSearcher,
     termContexts: JMap[Term, TermContext],
     label: String,
-    state: State
+    stateOpt: Option[State]
   ) extends OdinsonWeight(self, searcher, termContexts) {
 
     def extractTerms(terms: JSet[Term]): Unit = {
@@ -46,7 +46,7 @@ class StateQuery(
       context: LeafReaderContext,
       requiredPostings: SpanWeight.Postings
     ): OdinsonSpans = {
-      new StateSpans(label, context.docBase, state)
+      new StateSpans(label, context.docBase, stateOpt)
     }
 
   }
@@ -54,7 +54,7 @@ class StateQuery(
   class StateSpans(
     val label: String,
     val docBase: Int,
-    val state: State
+    val stateOpt: Option[State]
   ) extends OdinsonSpans {
 
     import DocIdSetIterator._
@@ -62,7 +62,7 @@ class StateQuery(
 
     // retrieve all segment-specific doc-ids corresponding to
     // the documents that contain a mention with the specified label
-    private val docIds: Array[Int] = state.getDocIds(docBase, label)
+    private val docIds: Array[Int] = stateOpt.map(_.getDocIds(docBase, label)).getOrElse(Array.empty)
     private var currentDocIndex: Int = -1
     private var currentDoc: Int = -1
 
@@ -89,7 +89,7 @@ class StateQuery(
         currentDoc = docIds(currentDocIndex)
         matchStart = -1
         // retrieve mentions
-        val (starts, ends) = state.getMatches(docBase, currentDoc, label).unzip
+        val (starts, ends) = stateOpt.get.getMatches(docBase, currentDoc, label).unzip
         startMatches = starts
         endMatches = ends
         currentMatchIndex = -1

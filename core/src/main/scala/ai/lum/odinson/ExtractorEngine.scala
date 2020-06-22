@@ -80,26 +80,29 @@ class ExtractorEngine(
 
   /** Apply the extractors and return results for at most `numSentences` */
   def extractMentions(extractors: Seq[Extractor], numSentences: Int, allowTriggerOverlaps: Boolean, disableMatchSelector: Boolean): Seq[Mention] = {
-    // extract mentions
-    val mentions = for {
-      e <- extractors
-      results = query(e.query, numSentences, disableMatchSelector)
-      scoreDoc <- results.scoreDocs
-      docFields = doc(scoreDoc.doc)
-      docId = docFields.getField("docId").stringValue
-      sentId = docFields.getField("sentId").stringValue
-      odinsonMatch <- scoreDoc.matches
-    } yield Mention(odinsonMatch, e.label, scoreDoc.doc, scoreDoc.segmentDocId, scoreDoc.segmentDocBase, docId, sentId, e.name)
-    // if needed, filter results to discard trigger overlaps
-    if (allowTriggerOverlaps) {
-      mentions
-    } else {
-      mentions.flatMap { m =>
-        m.odinsonMatch match {
-          case e: EventMatch => e.removeTriggerOverlaps.map(e => m.copy(odinsonMatch = e))
-          case _ => Some(m)
+    stateFactory.usingState { state =>
+      val mentions = for {
+        e <- extractors
+        odinResults = query(e.query, numSentences, null, disableMatchSelector, state)
+        scoreDoc <- odinResults.scoreDocs
+        docFields = doc(scoreDoc.doc)
+        docId = docFields.getField("docId").stringValue
+        sentId = docFields.getField("sentId").stringValue
+        odinsonMatch <- scoreDoc.matches
+      } yield Mention(odinsonMatch, e.label, scoreDoc.doc, scoreDoc.segmentDocId, scoreDoc.segmentDocBase, docId, sentId, e.name)
+      // if needed, filter results to discard trigger overlaps
+      val allowedMentions = if (allowTriggerOverlaps) {
+        mentions
+      } else {
+        mentions.flatMap { m =>
+          m.odinsonMatch match {
+            case e: EventMatch => e.removeTriggerOverlaps.map(e => m.copy(odinsonMatch = e))
+            case _ => Some(m)
+          }
         }
       }
+
+      allowedMentions
     }
   }
 
@@ -124,26 +127,20 @@ class ExtractorEngine(
   }
 
   /** executes query and returns next n results after the provided doc */
-  def query(
-    odinsonQuery: OdinsonQuery,
-    n: Int,
-    after: OdinsonScoreDoc,
-  ): OdinResults = {
+  def query(odinsonQuery: OdinsonQuery, n: Int, after: OdinsonScoreDoc): OdinResults = {
+    query(odinsonQuery, n, after, false)
+  }
+
+  /** executes query and returns next n results after the provided doc */
+  def query(odinsonQuery: OdinsonQuery, n: Int, after: OdinsonScoreDoc, disableMatchSelector: Boolean): OdinResults = {
     stateFactory.usingState { state =>
-      indexSearcher.odinSearch(after, odinsonQuery, state, n, false)
+      query(odinsonQuery, n, after, disableMatchSelector, state)
     }
   }
 
   /** executes query and returns next n results after the provided doc */
-  def query(
-    odinsonQuery: OdinsonQuery,
-    n: Int,
-    after: OdinsonScoreDoc,
-    disableMatchSelector: Boolean,
-  ): OdinResults = {
-    stateFactory.usingState { state =>
-      indexSearcher.odinSearch(after, odinsonQuery, state, n, disableMatchSelector)
-    }
+  def query(odinsonQuery: OdinsonQuery, n: Int, after: OdinsonScoreDoc, disableMatchSelector: Boolean, state: State): OdinResults = {
+    indexSearcher.odinSearch(after, odinsonQuery, state, n, disableMatchSelector)
   }
 
   def getString(docID: Int, m: OdinsonMatch): String = {

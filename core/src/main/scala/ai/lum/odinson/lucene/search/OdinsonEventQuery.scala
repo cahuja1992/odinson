@@ -1,8 +1,9 @@
 package ai.lum.odinson.lucene.search
 
-import java.util.{ Map => JMap, Set => JSet }
+import java.util.{Map => JMap, Set => JSet}
+
 import scala.annotation.tailrec
-import scala.collection.mutable.{ ArrayBuilder, ArrayBuffer, HashMap }
+import scala.collection.mutable.{ArrayBuffer, ArrayBuilder, HashMap}
 import scala.collection.JavaConverters._
 import org.apache.lucene.index._
 import org.apache.lucene.search._
@@ -13,6 +14,7 @@ import ai.lum.odinson.lucene.util._
 import ai.lum.odinson.lucene.search.spans._
 import ai.lum.odinson.digraph._
 import ai.lum.odinson.serialization.UnsafeSerializer
+import ai.lum.odinson.state.State
 
 case class ArgumentQuery(
   name: String,
@@ -107,6 +109,12 @@ class OdinsonEventQuery(
 ) extends OdinsonQuery { self =>
 
   override def hashCode: Int = (trigger, requiredArguments, optionalArguments, dependenciesField).##
+
+  override def setState(stateOpt: Option[State]): Unit = {
+    trigger.setState(stateOpt)
+//    requiredArguments.foreach(_.setState(stateOpt))
+//    optionalArguments.foreach(_.setState(stateOpt))
+  }
 
   def toString(field: String): String = {
     val triggerStr = trigger.toString(field)

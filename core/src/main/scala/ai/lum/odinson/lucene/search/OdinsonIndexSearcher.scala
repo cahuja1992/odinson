@@ -22,7 +22,7 @@ class OdinsonIndexSearcher(
     this(r.getContext(), e, computeTotalHits)
   }
 
-  def this(r: IndexReader, e: ExecutionContext,  computeTotalHits: Boolean) = {
+  def this(r: IndexReader, e: ExecutionContext, computeTotalHits: Boolean) = {
     this(r.getContext(), ExecutionContextExecutorServiceBridge(e), computeTotalHits)
   }
 
@@ -44,24 +44,36 @@ class OdinsonIndexSearcher(
   }
 
   def odinSearch(after: OdinsonScoreDoc, query: OdinsonQuery, state: State, numHits: Int, disableMatchSelector: Boolean): OdinResults = {
-    val limit = math.max(1, readerContext.reader().maxDoc())
-    require(
-      after == null || after.doc < limit,
-      s"after.doc exceeds the number of documents in the reader: after.doc=${after.doc} limit=${limit}"
-    )
-    val cappedNumHits = math.min(numHits, limit)
-    val manager = new CollectorManager[OdinsonCollector, OdinResults] {
-      def newCollector() = new OdinsonCollector(cappedNumHits, after, computeTotalHits, disableMatchSelector)
-      def reduce(collectors: Collection[OdinsonCollector]): OdinResults = {
-        val results1 = collectors.iterator.asScala.map(_.odinResults).toArray
-        val results2 = OdinResults.merge(0, cappedNumHits, results1, true)
-        val odinResultsIterator = OdinResultsIterator(results2, "label")
 
-        state.addMentions(odinResultsIterator)
-        results2
+    def odinSearch() = {
+      val limit = math.max(1, readerContext.reader().maxDoc())
+      require(
+        after == null || after.doc < limit,
+        s"after.doc exceeds the number of documents in the reader: after.doc=${after.doc} limit=${limit}"
+      )
+      val cappedNumHits = math.min(numHits, limit)
+      val manager = new CollectorManager[OdinsonCollector, OdinResults] {
+        def newCollector() = new OdinsonCollector(cappedNumHits, after, computeTotalHits, disableMatchSelector)
+
+        def reduce(collectors: Collection[OdinsonCollector]): OdinResults = {
+          val collectedResults = collectors.iterator.asScala.map(_.odinResults).toArray
+          val mergedResults = OdinResults.merge(0, cappedNumHits, collectedResults, true)
+          val odinResultsIterator = OdinResultsIterator(mergedResults, "label")
+
+          state.addMentions(odinResultsIterator)
+          mergedResults
+        }
       }
-    }
-    search(query, manager)
-  }
 
+      search(query, manager)
+    }
+
+    try {
+      query.setState(Some(state))
+      odinSearch()
+    }
+    finally {
+      query.setState(None)
+    }
+  }
 }
